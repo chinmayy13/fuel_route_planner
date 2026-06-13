@@ -29,50 +29,60 @@ within the USA, minimizing fuel costs based on real price data.
 
 ### 1. Clone the repo
 
-git clone <your-repo-url>
+```
+git clone (https://github.com/chinmayy13/fuel_route_planner)
 cd fuel_route_project
+```
 
-### 2. Create virtual environment
+### 2. Create a virtual environment
 
+```
 python -m venv venv
 source venv/bin/activate
+```
 
 ### 3. Install dependencies
-
+```
 pip install -r requirements.txt
+```
 
 ### 4. Set up environment variables
 
 Create a .env file in the root folder:
+```
 ORS_API_KEY=your_openrouteservice_api_key_here
+```
 
 Get a free API key at: https://openrouteservice.org/dev/#/signup
 
 ### 5. Run migrations
-
+```
 python manage.py migrate
+```
 
 ### 6. Start the server
-
+```
 python manage.py runserver
-
+```
 ---
 
 ## API Usage
 
 ### Endpoint
-
+```
 POST /api/route/
+```
 
 ### Request Body
-
+```
 {
 "start": "New York, NY",
 "finish": "Los Angeles, CA"
 }
+```
 
 ### Response
-
+```
 {
 "status": "success",
 "route": {
@@ -104,11 +114,11 @@ POST /api/route/
 "total_fuel_cost_usd": 1039.17
 }
 }
-
+```
 ---
 
 ## Project Structure
-
+```
 fuel_route_project/
 ├── fuel_route/ → Django project config
 │ ├── settings.py → App settings + custom config
@@ -123,7 +133,7 @@ fuel_route_project/
 ├── fuel_prices.csv → Fuel price dataset by city/state
 ├── requirements.txt → Python dependencies
 └── .env → Secret keys (not committed to git)
-
+```
 ---
 
 ## Algorithm explanation
