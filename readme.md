@@ -195,7 +195,7 @@ New York → Los Angeles (2,797 miles)
   geographically correct (e.g. Texas spans ~800 miles east to west).
 
 ### Error Responses
-
+```
 Missing fields:
 {
 "error": "Both 'start' and 'finish' are required."
@@ -205,3 +205,4 @@ Non-USA location:
 {
 "error": "Only US locations are supported."
 }
+```
