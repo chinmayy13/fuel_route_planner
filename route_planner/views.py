@@ -7,24 +7,6 @@ from .services.optimizer import optimize_fuel_stops
 
 
 class RoutePlannerView(APIView):
-    """
-    POST /api/route/
-
-    Request body:
-    {
-        "start": "New York, NY",
-        "finish": "Los Angeles, CA"
-    }
-
-    Response:
-    {
-        "status": "success",
-        "cached": false,
-        "route": { distance, duration, map_url },
-        "fuel_stops": [...],
-        "summary": { total_cost, total_gallons, ... }
-    }
-    """
 
     def post(self, request):
 
@@ -36,6 +18,23 @@ class RoutePlannerView(APIView):
                 {"error": "Both 'start' and 'finish' are required."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        if not start or not finish:
+            return Response(
+                {"error": "Both 'start' and 'finish' are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        non_usa_keywords = [
+            'UK', 'France', 'Germany', 'Canada', 'Mexico', 'Italy',
+            'Spain', 'China', 'Japan', 'Australia', 'India', 'Brazil'
+        ]
+        for keyword in non_usa_keywords:
+            if keyword.upper() in start.upper() or keyword.upper() in finish.upper():
+                return Response(
+                    {"error": "Only US locations are supported."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         cache_key = f"route_{start}_{finish}".replace(" ", "_").lower()
         cached_result = cache.get(cache_key)

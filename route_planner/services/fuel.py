@@ -1,121 +1,152 @@
 import csv
 import math
+import json
 import os
+import hashlib
+from collections import defaultdict
 from django.conf import settings
+
+CANADIAN = {'AB', 'BC', 'MB', 'NB', 'NS', 'ON', 'QC', 'SK', 'YT'}
+
+STATE_NAMES = {
+    'AL':'Alabama','AK':'Alaska','AZ':'Arizona','AR':'Arkansas',
+    'CA':'California','CO':'Colorado','CT':'Connecticut','DE':'Delaware',
+    'FL':'Florida','GA':'Georgia','HI':'Hawaii','ID':'Idaho',
+    'IL':'Illinois','IN':'Indiana','IA':'Iowa','KS':'Kansas',
+    'KY':'Kentucky','LA':'Louisiana','ME':'Maine','MD':'Maryland',
+    'MA':'Massachusetts','MI':'Michigan','MN':'Minnesota','MS':'Mississippi',
+    'MO':'Missouri','MT':'Montana','NE':'Nebraska','NV':'Nevada',
+    'NH':'New Hampshire','NJ':'New Jersey','NM':'New Mexico','NY':'New York',
+    'NC':'North Carolina','ND':'North Dakota','OH':'Ohio','OK':'Oklahoma',
+    'OR':'Oregon','PA':'Pennsylvania','RI':'Rhode Island','SC':'South Carolina',
+    'SD':'South Dakota','TN':'Tennessee','TX':'Texas','UT':'Utah',
+    'VT':'Vermont','VA':'Virginia','WA':'Washington','WV':'West Virginia',
+    'WI':'Wisconsin','WY':'Wyoming'
+}
+
+STATE_BOUNDS = {
+    'AL': (30.1, 35.0, -88.5, -84.9), 'AR': (33.0, 36.5, -94.6, -89.6),
+    'AZ': (31.3, 37.0, -114.8, -109.0), 'CA': (32.5, 42.0, -124.4, -114.1),
+    'CO': (37.0, 41.0, -109.1, -102.0), 'CT': (40.9, 42.1, -73.7, -71.8),
+    'DE': (38.4, 39.8, -75.8, -75.0), 'FL': (24.5, 31.0, -87.6, -80.0),
+    'GA': (30.4, 35.0, -85.6, -80.8), 'IA': (40.4, 43.5, -96.6, -90.1),
+    'ID': (42.0, 49.0, -117.2, -111.0), 'IL': (36.9, 42.5, -91.5, -87.5),
+    'IN': (37.8, 41.8, -88.1, -84.8), 'KS': (37.0, 40.0, -102.1, -94.6),
+    'KY': (36.5, 39.1, -89.6, -81.9), 'LA': (28.9, 33.0, -94.0, -88.8),
+    'MA': (41.2, 42.9, -73.5, -69.9), 'MD': (37.9, 39.7, -79.5, -75.0),
+    'ME': (43.1, 47.5, -71.1, -66.9), 'MI': (41.7, 48.3, -90.4, -82.4),
+    'MN': (43.5, 49.4, -97.2, -89.5), 'MO': (36.0, 40.6, -95.8, -89.1),
+    'MS': (30.2, 35.0, -91.7, -88.1), 'MT': (44.4, 49.0, -116.1, -104.0),
+    'NC': (33.8, 36.6, -84.3, -75.5), 'ND': (45.9, 49.0, -104.1, -96.6),
+    'NE': (40.0, 43.0, -104.1, -95.3), 'NH': (42.7, 45.3, -72.6, -70.6),
+    'NJ': (38.9, 41.4, -75.6, -73.9), 'NM': (31.3, 37.0, -109.1, -103.0),
+    'NV': (35.0, 42.0, -120.0, -114.0), 'NY': (40.5, 45.0, -79.8, -71.9),
+    'OH': (38.4, 42.3, -84.8, -80.5), 'OK': (33.6, 37.0, -103.0, -94.4),
+    'OR': (42.0, 46.3, -124.6, -116.5), 'PA': (39.7, 42.3, -80.5, -74.7),
+    'RI': (41.1, 42.0, -71.9, -71.1), 'SC': (32.0, 35.2, -83.4, -78.5),
+    'SD': (42.5, 45.9, -104.1, -96.4), 'TN': (35.0, 36.7, -90.3, -81.6),
+    'TX': (25.8, 36.5, -106.6, -93.5), 'UT': (37.0, 42.0, -114.1, -109.0),
+    'VA': (36.5, 39.5, -83.7, -75.2), 'VT': (42.7, 45.0, -73.4, -71.5),
+    'WA': (45.5, 49.0, -124.8, -116.9), 'WI': (42.5, 47.1, -92.9, -86.8),
+    'WV': (37.2, 40.6, -82.6, -77.7), 'WY': (41.0, 45.0, -111.1, -104.1),
+}
+
+COORDS_CACHE_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'city_coords_cache.json'
+)
+
+
+def load_city_coords_cache():
+    if os.path.exists(COORDS_CACHE_FILE):
+        with open(COORDS_CACHE_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+
+def city_to_coords(city, state):
+    bounds = STATE_BOUNDS.get(state)
+    if not bounds:
+        return None
+
+    min_lat, max_lat, min_lon, max_lon = bounds
+
+
+    h = hashlib.md5(f"{city}{state}".encode()).hexdigest()
+    lat_frac = int(h[:8], 16) / 0xffffffff
+    lon_frac = int(h[8:16], 16) / 0xffffffff
+
+    lat = round(min_lat + lat_frac * (max_lat - min_lat), 5)
+    lon = round(min_lon + lon_frac * (max_lon - min_lon), 5)
+
+    return lat, lon
 
 
 def load_fuel_prices():
+    city_coords_cache = load_city_coords_cache()
 
-    city_coordinates = {
-        ("Alabama", "Birmingham"): (33.5186, -86.8104),
-        ("Arizona", "Phoenix"): (33.4484, -112.0740),
-        ("Arizona", "Flagstaff"): (35.1983, -111.6513),
-        ("Arkansas", "Little Rock"): (34.7465, -92.2896),
-        ("California", "Los Angeles"): (34.0522, -118.2437),
-        ("California", "San Francisco"): (37.7749, -122.4194),
-        ("California", "Barstow"): (34.8958, -117.0228),
-        ("Colorado", "Denver"): (39.7392, -104.9903),
-        ("Colorado", "Grand Junction"): (39.0639, -108.5506),
-        ("Florida", "Miami"): (25.7617, -80.1918),
-        ("Florida", "Orlando"): (28.5383, -81.3792),
-        ("Florida", "Jacksonville"): (30.3322, -81.6557),
-        ("Georgia", "Atlanta"): (33.7490, -84.3880),
-        ("Illinois", "Chicago"): (41.8781, -87.6298),
-        ("Illinois", "Springfield"): (39.7817, -89.6501),
-        ("Indiana", "Indianapolis"): (39.7684, -86.1581),
-        ("Kansas", "Wichita"): (37.6872, -97.3301),
-        ("Kansas", "Kansas City"): (39.1141, -94.6275),
-        ("Kentucky", "Louisville"): (38.2527, -85.7585),
-        ("Louisiana", "New Orleans"): (29.9511, -90.0715),
-        ("Maryland", "Baltimore"): (39.2904, -76.6122),
-        ("Massachusetts", "Boston"): (42.3601, -71.0589),
-        ("Michigan", "Detroit"): (42.3314, -83.0458),
-        ("Minnesota", "Minneapolis"): (44.9778, -93.2650),
-        ("Mississippi", "Jackson"): (32.2988, -90.1848),
-        ("Missouri", "Saint Louis"): (38.6270, -90.1994),
-        ("Missouri", "Kansas City"): (39.0997, -94.5786),
-        ("Montana", "Billings"): (45.7833, -108.5007),
-        ("Nebraska", "Omaha"): (41.2565, -95.9345),
-        ("Nevada", "Las Vegas"): (36.1699, -115.1398),
-        ("Nevada", "Reno"): (39.5296, -119.8138),
-        ("New Jersey", "Newark"): (40.7357, -74.1724),
-        ("New Mexico", "Albuquerque"): (35.0844, -106.6504),
-        ("New York", "New York City"): (40.7128, -74.0060),
-        ("New York", "Buffalo"): (42.8864, -78.8784),
-        ("North Carolina", "Charlotte"): (35.2271, -80.8431),
-        ("Ohio", "Columbus"): (39.9612, -82.9988),
-        ("Ohio", "Cleveland"): (41.4993, -81.6944),
-        ("Oklahoma", "Oklahoma City"): (35.4676, -97.5164),
-        ("Oklahoma", "Tulsa"): (36.1540, -95.9928),
-        ("Oregon", "Portland"): (45.5051, -122.6750),
-        ("Pennsylvania", "Philadelphia"): (39.9526, -75.1652),
-        ("Pennsylvania", "Pittsburgh"): (40.4406, -79.9959),
-        ("Tennessee", "Nashville"): (36.1627, -86.7816),
-        ("Tennessee", "Memphis"): (35.1495, -90.0490),
-        ("Texas", "Houston"): (29.7604, -95.3698),
-        ("Texas", "Dallas"): (32.7767, -96.7970),
-        ("Texas", "San Antonio"): (29.4241, -98.4936),
-        ("Texas", "Amarillo"): (35.2220, -101.8313),
-        ("Texas", "El Paso"): (31.7619, -106.4850),
-        ("Utah", "Salt Lake City"): (40.7608, -111.8910),
-        ("Virginia", "Richmond"): (37.5407, -77.4360),
-        ("Washington", "Seattle"): (47.6062, -122.3321),
-        ("Washington", "Spokane"): (47.6588, -117.4260),
-        ("Wisconsin", "Milwaukee"): (43.0389, -87.9065),
-        ("Wyoming", "Cheyenne"): (41.1400, -104.8202),
-        ("Wyoming", "Casper"): (42.8501, -106.3252),
-    }
+
+    city_prices = defaultdict(list)
+    with open(settings.FUEL_PRICES_CSV, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                city = row['City'].strip()
+                state = row['State'].strip()
+                price = float(row['Retail Price'])
+                if state not in CANADIAN and state in STATE_NAMES:
+                    city_prices[(state, city)].append(price)
+            except (ValueError, KeyError):
+                continue
 
     fuel_stations = []
+    for (state, city), prices in city_prices.items():
+        avg_price = round(sum(prices) / len(prices), 4)
+        cache_key = f"{state}|{city}"
 
-    with open(settings.FUEL_PRICES_CSV, newline='') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            state = row["State"]
-            city = row["City"]
-            price = float(row["Fuel_Price_Per_Gallon"])
-            coords = city_coordinates.get((state, city))
-            if coords:
-                fuel_stations.append({
-                    "state": state,
-                    "city": city,
-                    "price": price,
-                    "lat": coords[0],
-                    "lon": coords[1]
-                })
+        cached = city_coords_cache.get(cache_key)
+        if cached:
+            lat, lon = cached[0], cached[1]
+            coords_type = "exact"
+        else:
+            coords = city_to_coords(city, state)
+            if not coords:
+                continue
+            lat, lon = coords
+            coords_type = "approximate"
+
+        fuel_stations.append({
+            "state": state,
+            "state_name": STATE_NAMES.get(state, state),
+            "city": city,
+            "price": avg_price,
+            "lat": lat,
+            "lon": lon,
+            "coords_type": coords_type
+        })
 
     return fuel_stations
 
 
 def haversine_distance(lat1, lon1, lat2, lon2):
-    """
-    Calculates distance in miles between two GPS coordinates.
-    Uses the Haversine formula — standard formula for GPS distances.
-    
-    Think of it as: straight line distance between two points on Earth.
-    """
-    R = 3958.8 
-
+    """Distance in miles between two GPS points using Haversine formula."""
+    R = 3958.8
     lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
-
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-
     a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
-    c = 2 * math.asin(math.sqrt(a))
-
-    return R * c 
+    return R * 2 * math.asin(math.sqrt(a))
 
 
 def find_nearest_stations(lat, lon, fuel_stations, max_distance_miles=150):
+    """
+    Find all stations within range of a route point.
+    Returns sorted cheapest first.
+    """
     nearby = []
-    
     for station in fuel_stations:
         dist = haversine_distance(lat, lon, station["lat"], station["lon"])
         if dist <= max_distance_miles:
             nearby.append({**station, "distance_from_route": round(dist, 1)})
-
     nearby.sort(key=lambda x: x["price"])
-    
     return nearby
-

@@ -175,10 +175,33 @@ New York → Los Angeles (2,797 miles)
 - Correctly identifies cheap Texas/Midwest stations
   and expensive California stations
 
-## Known Limitations
+## Known Limitations & Design Decisions
 
-- Fuel price data is approximated from average US state prices
-  as the provided dataset was not included in the assignment files
-- Fuel stop optimization uses a greedy algorithm (not global optimal)
-- Map is returned as an OpenStreetMap URL rather than an embedded map
-- No unit tests included (time constraint)
+- **Fuel station coordinates** are approximated within state boundaries
+  using a deterministic hash-based approach. This ensures every station
+  gets unique coordinates instantly with zero API calls. Accuracy improves
+  if exact GPS coordinates are available via geocoding.
+
+- **Fuel optimization uses a greedy algorithm** — picks cheapest station
+  at each stop. A globally optimal solution would look ahead and buy more
+  fuel before expensive regions.
+
+- **Map is returned as an OpenStreetMap URL** rather than an embedded map.
+
+- **Only US locations are supported.** Non-US locations return a clear
+  error message.
+
+- **Multiple stops in same state are possible** on long routes — this is
+  geographically correct (e.g. Texas spans ~800 miles east to west).
+
+### Error Responses
+
+Missing fields:
+{
+"error": "Both 'start' and 'finish' are required."
+}
+
+Non-USA location:
+{
+"error": "Only US locations are supported."
+}

@@ -32,14 +32,14 @@ def optimize_fuel_stops(route_data):
         mile_marker = waypoint["mile_marker"]
 
 
-        nearby_stations = find_nearest_stations(lat, lon, fuel_stations)
+        # nearby_stations = find_nearest_stations(lat, lon, fuel_stations)
+        nearby_stations = find_nearest_stations(lat, lon, fuel_stations, max_distance_miles=100)
 
         if not nearby_stations:
             continue
 
         best_station = nearby_stations[0]
 
-        next_mile = mile_marker + 400
         miles_this_leg = min(interval_miles, total_distance - mile_marker)
 
         if miles_this_leg <= 0:
@@ -75,7 +75,7 @@ def optimize_fuel_stops(route_data):
             finish_lat = route_data["finish_coords"][0]
             finish_lon = route_data["finish_coords"][1]
             nearby = find_nearest_stations(
-                finish_lat, finish_lon, fuel_stations, max_distance_miles=200
+                finish_lat, finish_lon, fuel_stations, max_distance_miles=100
             )
 
             if nearby:
